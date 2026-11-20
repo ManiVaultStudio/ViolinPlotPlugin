@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' qrc:; style-src 'self' qrc: 'unsafe-inline'; img-src data: blob:; connect-src 'none'">
+  <title>Violin plots</title>
+  <link rel="stylesheet" href="violin.css">
+  <script defer src="../jslibs/d3.v7.min.js"></script>
+  <script defer src="violin.js"></script>
+  <script defer src="violin.bridge.js"></script>
+</head>
+<body>
+  <main id="chart-scroll" aria-label="Expression violin plots">
+    <div id="empty-message" role="status">Drop an expression Points dataset here.</div>
+    <svg id="violin-chart" class="plot" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gene expression distributions" hidden></svg>
+  </main>
+  <div id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

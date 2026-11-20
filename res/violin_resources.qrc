@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="violin/violin.svg">violin.svg</file>
+        <file alias="violin/violin.html">violin/violin.html</file>
+        <file alias="violin/violin.css">violin/violin.css</file>
+        <file alias="violin/violin.js">violin/violin.js</file>
+        <file alias="violin/violin.bridge.js">violin/violin.bridge.js</file>
+        <file alias="jslibs/d3.v7.min.js">jslibs/d3.v7.min.js</file>
+    </qresource>
+</RCC>
