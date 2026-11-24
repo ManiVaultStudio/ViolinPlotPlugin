@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GeneSelectionAction.h"
+#include "CellTypeSelectionAction.h"
 #include "../ViolinStatistics.h"
 
 #include <actions/DatasetPickerAction.h>
@@ -24,6 +25,7 @@ public:
 
     void initialize(ViolinPlotPlugin* violinPlotPlugin);
     QWidget* createDatasetWidget(QWidget* parent);
+    QWidget* createSelectionWidget(QWidget* parent);
     QWidget* createStatusWidget(QWidget* parent);
     void updatePlotOptions();
     void setExportEnabled(bool enabled);
@@ -36,6 +38,7 @@ public: // Serialization
 
 public: // Action getters
     GeneSelectionAction& getGeneSelectionAction() { return _geneSelectionAction; }
+    CellTypeSelectionAction& getCellTypeSelectionAction() { return _cellTypeSelectionAction; }
     mv::gui::DatasetPickerAction& getPointDatasetPickerAction() { return _pointDatasetPickerAction; }
     mv::gui::DatasetPickerAction& getClusterDatasetPickerAction() { return _clusterDatasetPickerAction; }
     mv::gui::ToggleAction& getLogTransformAction() { return _logTransformAction; }
@@ -52,6 +55,7 @@ private:
 
     ViolinPlotPlugin*               _violinPlotPlugin = nullptr;
     GeneSelectionAction             _geneSelectionAction;
+    CellTypeSelectionAction         _cellTypeSelectionAction;
     mv::gui::DatasetPickerAction    _pointDatasetPickerAction;
     mv::gui::DatasetPickerAction    _clusterDatasetPickerAction;
     mv::gui::ToggleAction           _logTransformAction;

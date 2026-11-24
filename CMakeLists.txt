@@ -47,6 +47,8 @@ set(ACTIONS
     src/Actions/SettingsAction.cpp
     src/Actions/GeneSelectionAction.h
     src/Actions/GeneSelectionAction.cpp
+    src/Actions/CellTypeSelectionAction.h
+    src/Actions/CellTypeSelectionAction.cpp
 )
 
 set(PLUGININFO

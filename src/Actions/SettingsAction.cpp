@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QSplitter>
 
 using namespace mv;
 using namespace mv::gui;
@@ -16,6 +17,7 @@ namespace violin {
 SettingsAction::SettingsAction(QObject* parent, const QString& title) :
     GroupAction(parent, title),
     _geneSelectionAction(this, "Gene selection"),
+    _cellTypeSelectionAction(this, "Cell type selection"),
     _pointDatasetPickerAction(this, "Expression data"),
     _clusterDatasetPickerAction(this, "Grouping"),
     _logTransformAction(this, "log1p", false),
@@ -68,6 +70,7 @@ void SettingsAction::initialize(ViolinPlotPlugin* violinPlotPlugin)
     _violinPlotPlugin = violinPlotPlugin;
 
     connect(&_geneSelectionAction, &GeneSelectionAction::selectionChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
+    connect(&_cellTypeSelectionAction, &CellTypeSelectionAction::displayChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_logTransformAction, &ToggleAction::toggled, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_includeZerosAction, &ToggleAction::toggled, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_bandwidthScaleAction, &DecimalAction::valueChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
@@ -107,6 +110,19 @@ QWidget* SettingsAction::createDatasetWidget(QWidget* parent)
     layout->addWidget(_helpAction.createWidget(widget, TriggerAction::Text));
 
     return widget;
+}
+
+QWidget* SettingsAction::createSelectionWidget(QWidget* parent)
+{
+    auto* selectionSplitter = new QSplitter(Qt::Vertical, parent);
+
+    selectionSplitter->addWidget(_geneSelectionAction.createWidget(selectionSplitter, GroupAction::Vertical | GroupAction::NoMargins));
+    selectionSplitter->addWidget(_cellTypeSelectionAction.createWidget(selectionSplitter));
+    selectionSplitter->setChildrenCollapsible(false);
+    selectionSplitter->setStretchFactor(0, 3);
+    selectionSplitter->setStretchFactor(1, 2);
+    selectionSplitter->setSizes({330, 220});
+    return selectionSplitter;
 }
 
 QWidget* SettingsAction::createStatusWidget(QWidget* parent)
@@ -170,6 +186,9 @@ void SettingsAction::fromVariantMap(const QVariantMap& variantMap)
     _bandwidthScaleAction.fromParentVariantMap(variantMap);
     _geneSelectionAction.fromParentVariantMap(variantMap);
 
+    if (variantMap.contains(_cellTypeSelectionAction.getSerializationName()))
+        _cellTypeSelectionAction.fromParentVariantMap(variantMap);
+
     updatePlotOptions();
 }
 
@@ -185,6 +204,7 @@ QVariantMap SettingsAction::toVariantMap() const
     _sharedYAxisAction.insertIntoVariantMap(variantMap);
     _bandwidthScaleAction.insertIntoVariantMap(variantMap);
     _geneSelectionAction.insertIntoVariantMap(variantMap);
+    _cellTypeSelectionAction.insertIntoVariantMap(variantMap);
 
     return variantMap;
 }
@@ -214,7 +234,8 @@ void SettingsAction::showHelp()
 
     QMessageBox::information(&_violinPlotPlugin->getWidget(), "Violin plots",
         "Load an expression Points dataset (cells/spots × genes), then optionally its Clusters dataset. "
-        "Use the gene checkboxes to select features.\n\n"
+        "Use the gene checkboxes to select features. In the Cell types panel, check groups to show them and drag rows to reorder them. "
+        "All cell types are shown by default; Show all and Hide all change visibility without changing the cluster selection.\n\n"
         "Full symmetric KDE violins show each group in a separate panel for each gene. "
         "Density is trimmed to the observed range. White dots show medians, thick bars show the interquartile range, "
         "and thin lines show the observed range. Widths are normalized per violin; n is the number plotted.\n\n"

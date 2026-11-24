@@ -45,10 +45,10 @@ void ViolinPlotPlugin::init()
     auto* genePlotSplitter = new QSplitter;
 
     _violinPlotWidget = new ViolinPlotWidget;
-    genePlotSplitter->addWidget(_settingsAction.getGeneSelectionAction().createWidget(genePlotSplitter, GroupAction::Vertical | GroupAction::NoMargins));
+    genePlotSplitter->addWidget(_settingsAction.createSelectionWidget(genePlotSplitter));
     genePlotSplitter->addWidget(_violinPlotWidget);
     genePlotSplitter->setStretchFactor(1, 1);
-    genePlotSplitter->setSizes({190, 800});
+    genePlotSplitter->setSizes({240, 800});
     mainLayout->addWidget(genePlotSplitter, 1);
     mainLayout->addWidget(_settingsAction.createStatusWidget(&getWidget()));
 
@@ -95,8 +95,8 @@ void ViolinPlotPlugin::init()
     connect(_violinPlotWidget, &ViolinPlotWidget::groupActivated, this, &ViolinPlotPlugin::activateClusterGroup);
     connect(&_pointDataset, &Dataset<Points>::dataChanged, this, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_pointDataset, &Dataset<Points>::removed, this, &ViolinPlotPlugin::updateGeneSelection);
-    connect(&_clusterDataset, &Dataset<Clusters>::dataChanged, this, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_clusterDataset, &Dataset<Clusters>::removed, this, &ViolinPlotPlugin::schedulePlotUpdate);
+    connect(&_clusterDataset, &Dataset<Clusters>::dataChanged, this, &ViolinPlotPlugin::updateCellTypeSelection);
+    connect(&_clusterDataset, &Dataset<Clusters>::removed, this, &ViolinPlotPlugin::updateCellTypeSelection);
     connect(&_clusterDataset, &Dataset<Clusters>::dataSelectionChanged, this, &ViolinPlotPlugin::synchronizeClusterSelection);
 
     if (_hasDeferredPluginState) {
@@ -190,12 +190,35 @@ void ViolinPlotPlugin::setClusterDataset(const Dataset<Clusters>& clusterDataset
     _groupingWarningMessage.clear();
     _settingsAction.getClusterDatasetPickerAction().setCurrentDataset(_clusterDataset);
     synchronizeClusterSelection();
-    schedulePlotUpdate();
+    updateCellTypeSelection();
 }
 
 void ViolinPlotPlugin::updateGeneSelection()
 {
     _settingsAction.getGeneSelectionAction().setPointsDataset(_pointDataset);
+    schedulePlotUpdate();
+}
+
+void ViolinPlotPlugin::updateCellTypeSelection()
+{
+    std::vector<violin::CellTypeEntry> cellTypes;
+    QString groupingDatasetId;
+
+    if (_clusterDataset.isValid()) {
+        groupingDatasetId = _clusterDataset->getId();
+        const auto& clusters = _clusterDataset->getClusters();
+
+        cellTypes.reserve(clusters.size());
+
+        for (int clusterIndex = 0; clusterIndex < clusters.size(); ++clusterIndex)
+        {
+            const auto& cluster = clusters[clusterIndex];
+
+            cellTypes.push_back({cluster.getId(), clusterIndex, cluster.getName(), cluster.getColor(), true});
+        }
+    }
+
+    _settingsAction.getCellTypeSelectionAction().setCellTypes(groupingDatasetId, cellTypes);
     schedulePlotUpdate();
 }
 
@@ -274,8 +297,11 @@ void ViolinPlotPlugin::beginPlotUpdate()
 
         const auto& clusters = _clusterDataset->getClusters();
 
-        for (int clusterIndex = 0; clusterIndex < clusters.size(); ++clusterIndex)
+        for (const auto clusterIndex : _settingsAction.getCellTypeSelectionAction().getVisibleClusterIndices())
         {
+            if (clusterIndex < 0 || clusterIndex >= clusters.size())
+                continue;
+
             const auto& cluster = clusters[clusterIndex];
 
             _violinGroups.push_back({cluster.getName(), cluster.getColor(), clusterIndex});
@@ -305,8 +331,10 @@ void ViolinPlotPlugin::beginPlotUpdate()
     }
 
     if (_violinGroups.empty()) {
-        _violinPlotWidget->setMessage("The Clusters dataset has no groups. Choose All cells to plot without grouping.");
-        _settingsAction.getStatusMessageAction().setString("No clusters available.");
+        const bool hasClusters = _clusterDataset.isValid() && !_clusterDataset->getClusters().isEmpty();
+
+        _violinPlotWidget->setMessage(hasClusters ? "Check one or more cell types to show their violins, or choose Show all." : "The Clusters dataset has no groups. Choose All cells to plot without grouping.");
+        _settingsAction.getStatusMessageAction().setString(hasClusters ? "No cell types are checked." : "No clusters available.");
         return;
     }
 

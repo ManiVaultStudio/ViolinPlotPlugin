@@ -41,6 +41,7 @@ private:
     void setClusterDataset(const mv::Dataset<Clusters>& clusterDataset);
     bool isCompatibleClusterDataset(const mv::Dataset<Clusters>& clusterDataset) const;
     void updateGeneSelection();
+    void updateCellTypeSelection();
     void schedulePlotUpdate();
     void beginPlotUpdate();
     void calculateNextGeneDistribution();
