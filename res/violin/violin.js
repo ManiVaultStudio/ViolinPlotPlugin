@@ -15,7 +15,7 @@
     let data = { groups: [], panels: [] }, options = { ...defaults };
     let selected = new Set(), message = empty.textContent, frame = 0;
     let onGroupActivated = () => {}, onError = () => {};
-    const panelHeight = 330, maxTotalDots = 12000;
+    const panelHeight = 312, maxTotalDots = 12000;
     const fmt = d3.format(".4~g");
     const numeric = value => Number.isFinite(Number(value)) ? Number(value) : 0;
     const short = (text, length) => text.length > length ? text.slice(0, length - 1) + "…" : text;
@@ -170,9 +170,7 @@
             const root = svg.append("g").attr("class", "gene-panel").attr("transform", `translate(0,${16 + pi * panelHeight})`);
             root.append("text").attr("class", "panel-title").attr("x", left).attr("y", 18)
                 .text(short(panel.name, 80)).append("title").text(panel.name);
-            root.append("text").attr("class", "subtitle").attr("x", left).attr("y", 36)
-                .text(options.log1p ? "ln(1 + expression)" : "Expression · input values");
-            const plot = root.append("g").attr("transform", `translate(${left},54)`);
+            const plot = root.append("g").attr("transform", `translate(${left},36)`);
             const domain = options.sharedAxis ? sharedDomain : domainFor(panel.distributions);
             const y = d3.scaleLinear().domain(domain).range([plotHeight, 0]);
             const x = d3.scaleBand().domain(d3.range(data.groups.length)).range([0, plotWidth]).padding(0.24);
@@ -185,7 +183,7 @@
             axis.selectAll(".tick text").attr("text-anchor", "end").attr("transform", "translate(-3,5) rotate(-28)")
                 .append("title").text(i => data.groups[i].name);
             root.append("text").attr("class", "axis-label").attr("text-anchor", "middle")
-                .attr("transform", `translate(17,${54 + plotHeight / 2}) rotate(-90)`)
+                .attr("transform", `translate(17,${36 + plotHeight / 2}) rotate(-90)`)
                 .text(options.log1p ? "ln(1 + expression)" : "Expression");
             const clipId = `violin-panel-${pi}`;
             defs.append("clipPath").attr("id", clipId).append("rect")
