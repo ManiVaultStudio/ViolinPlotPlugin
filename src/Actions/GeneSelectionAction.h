@@ -30,7 +30,6 @@ public: // Action getters
 public: // Serialization
     void fromVariantMap(const QVariantMap& variantMap) override;
     QVariantMap toVariantMap() const override;
-    void fromLegacyVariantMap(const QVariantMap& variantMap);
 
 signals:
     void selectionChanged();

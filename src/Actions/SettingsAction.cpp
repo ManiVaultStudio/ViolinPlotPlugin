@@ -185,9 +185,7 @@ void SettingsAction::fromVariantMap(const QVariantMap& variantMap)
     _sharedYAxisAction.fromParentVariantMap(variantMap);
     _bandwidthScaleAction.fromParentVariantMap(variantMap);
     _geneSelectionAction.fromParentVariantMap(variantMap);
-
-    if (variantMap.contains(_cellTypeSelectionAction.getSerializationName()))
-        _cellTypeSelectionAction.fromParentVariantMap(variantMap);
+    _cellTypeSelectionAction.fromParentVariantMap(variantMap);
 
     updatePlotOptions();
 }
@@ -207,24 +205,6 @@ QVariantMap SettingsAction::toVariantMap() const
     _cellTypeSelectionAction.insertIntoVariantMap(variantMap);
 
     return variantMap;
-}
-
-void SettingsAction::fromLegacyVariantMap(const QVariantMap& variantMap)
-{
-    _pointDatasetPickerAction.fromParentVariantMap(variantMap);
-    _clusterDatasetPickerAction.fromParentVariantMap(variantMap);
-    loadDatasets();
-
-    const auto settings = variantMap.value("ViolinPlot").toMap();
-
-    _logTransformAction.setChecked(settings.value("Log1p", false).toBool());
-    _includeZerosAction.setChecked(settings.value("IncludeZeros", true).toBool());
-    _showCellDotsAction.setChecked(settings.value("ShowDots", true).toBool());
-    _sharedYAxisAction.setChecked(settings.value("SharedAxis", false).toBool());
-    _bandwidthScaleAction.setValue(settings.value("Bandwidth", 1.0).toFloat());
-    _geneSelectionAction.fromLegacyVariantMap(settings);
-
-    updatePlotOptions();
 }
 
 void SettingsAction::showHelp()

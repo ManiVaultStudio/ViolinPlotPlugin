@@ -34,7 +34,6 @@ public:
 public: // Serialization
     void fromVariantMap(const QVariantMap& variantMap) override;
     QVariantMap toVariantMap() const override;
-    void fromLegacyVariantMap(const QVariantMap& variantMap);
 
 public: // Action getters
     GeneSelectionAction& getGeneSelectionAction() { return _geneSelectionAction; }

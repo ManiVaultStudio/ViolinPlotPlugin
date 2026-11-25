@@ -148,18 +148,4 @@ QVariantMap GeneSelectionAction::toVariantMap() const
     return variantMap;
 }
 
-void GeneSelectionAction::fromLegacyVariantMap(const QVariantMap& variantMap)
-{
-    if (variantMap.contains("Dimensions")) {
-        QVector<std::int32_t> geneDimensionIndices;
-
-        for (const auto& value : variantMap.value("Dimensions").toList())
-            geneDimensionIndices.push_back(value.toInt());
-
-        setSelectedDimensions(geneDimensionIndices);
-    }
-
-    _geneSearchAction.setString(variantMap.value("Search").toString());
-}
-
 }

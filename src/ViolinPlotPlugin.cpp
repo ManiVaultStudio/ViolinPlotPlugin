@@ -496,10 +496,7 @@ void ViolinPlotPlugin::fromVariantMap(const QVariantMap& variantMap)
 
     ViewPlugin::fromVariantMap(variantMap);
 
-    if (variantMap.contains("Settings"))
-        _settingsAction.fromParentVariantMap(variantMap);
-    else
-        _settingsAction.fromLegacyVariantMap(variantMap);
+    _settingsAction.fromParentVariantMap(variantMap);
 
     schedulePlotUpdate();
 }
