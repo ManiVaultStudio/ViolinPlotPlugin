@@ -26,7 +26,6 @@ public:
     SettingsAction(QObject* parent, const QString& title);
 
     void initialize(ViolinPlotPlugin* violinPlotPlugin);
-    QWidget* createTitleWidget(QWidget* parent);
     QWidget* createSelectionWidget(QWidget* parent);
     QWidget* createStatusWidget(QWidget* parent);
     void updatePlotOptions();
@@ -44,7 +43,6 @@ public: // Action getters
     ExportAction& getExportAction() { return _exportAction; }
     GeneSelectionAction& getGeneSelectionAction() { return _geneSelectionAction; }
     CellTypeSelectionAction& getCellTypeSelectionAction() { return _cellTypeSelectionAction; }
-    mv::gui::StringAction& getDatasetDisplayNameAction() { return _datasetDisplayNameAction; }
     mv::gui::StringAction& getStatusMessageAction() { return _statusMessageAction; }
 
 protected:
@@ -62,7 +60,6 @@ private:
     GeneSelectionAction                  _geneSelectionAction;
     CellTypeSelectionAction              _cellTypeSelectionAction;
     mv::gui::TriggerAction               _helpAction;
-    mv::gui::StringAction                _datasetDisplayNameAction;
     mv::gui::StringAction                _statusMessageAction;
     mv::gui::HorizontalToolbarAction     _primaryToolbarAction;
     bool                                 _isRestoringState = false;

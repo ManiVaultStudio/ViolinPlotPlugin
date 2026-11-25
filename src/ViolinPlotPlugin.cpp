@@ -45,14 +45,8 @@ void ViolinPlotPlugin::init()
 
     genePlotSplitter->addWidget(_settingsAction.createSelectionWidget(genePlotSplitter));
 
-    auto* plotAreaWidget = new QWidget(genePlotSplitter);
-    auto* plotAreaLayout = new QVBoxLayout(plotAreaWidget);
-
-    plotAreaLayout->setContentsMargins(0, 0, 0, 0);
-    plotAreaLayout->addWidget(_settingsAction.createTitleWidget(plotAreaWidget));
     _violinPlotWidget = new ViolinPlotWidget;
-    plotAreaLayout->addWidget(_violinPlotWidget, 1);
-    genePlotSplitter->addWidget(plotAreaWidget);
+    genePlotSplitter->addWidget(_violinPlotWidget);
     genePlotSplitter->setStretchFactor(1, 1);
     genePlotSplitter->setSizes({240, 800});
     mainLayout->addWidget(genePlotSplitter, 1);
@@ -273,7 +267,6 @@ void ViolinPlotPlugin::beginPlotUpdate()
     _dropWidget->setShowDropIndicator(!_pointDataset.isValid());
 
     if (!_pointDataset.isValid()) {
-        _settingsAction.getDatasetDisplayNameAction().setString("Violin plots — no expression data loaded");
         _violinPlotWidget->setMessage("Drop an expression Points dataset here.");
         _settingsAction.getStatusMessageAction().setString("No expression data loaded.");
         return;
@@ -284,8 +277,6 @@ void ViolinPlotPlugin::beginPlotUpdate()
         _settingsAction.getStatusMessageAction().setString("Incompatible cluster grouping.");
         return;
     }
-
-    _settingsAction.getDatasetDisplayNameAction().setString(_pointDataset->getGuiName() + "  /  " + (_clusterDataset.isValid() ? _clusterDataset->getGuiName() : "All cells"));
 
     for (const auto geneDimensionIndex : _settingsAction.getGeneSelectionAction().getSelectedDimensions())
         _pendingGeneDimensionIndices.push_back(geneDimensionIndex);
@@ -429,7 +420,7 @@ void ViolinPlotPlugin::calculateNextGeneDistribution()
         _geneCalculationTimer.stop();
         _settingsAction.setExportEnabled(true);
 
-        QString statusMessage = QString("%1 genes · %2 groups · %3 cells/spots · widths normalized per violin · median / IQR").arg(qulonglong(_violinPanels.size())).arg(qulonglong(_violinGroups.size())).arg(qulonglong(_pointDataset->getNumPoints()));
+        QString statusMessage = QString("%1 genes · %2 groups · %3 cells/spots").arg(qulonglong(_violinPanels.size())).arg(qulonglong(_violinGroups.size())).arg(qulonglong(_pointDataset->getNumPoints()));
 
         if (_geneLimitExceeded)
             statusMessage += QString(" · showing the first %1 selected genes").arg(qulonglong(violin::GeneSelectionAction::maximumDisplayedGenes));

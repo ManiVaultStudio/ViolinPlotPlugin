@@ -14,7 +14,7 @@ GeneSelectionAction::GeneSelectionAction(QObject* parent, const QString& title) 
     VerticalGroupAction(parent, title),
     _geneSearchAction(this, "Search"),
     _geneDimensionsPickerAction(this, "Genes"),
-    _selectionHintAction(this, "Selection hint", QString("Select genes with the checkboxes.\nUp to %1 genes per view.").arg(qulonglong(maximumDisplayedGenes)))
+    _selectionHintAction(this, "Selection hint", QString("Up to %1 genes per view.").arg(qulonglong(maximumDisplayedGenes)))
 {
     setShowLabels(false);
     setConnectionPermissionsToForceNone(true);

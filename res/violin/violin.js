@@ -25,8 +25,8 @@
       .plot {font-family:Arial,Helvetica,sans-serif;font-size:12px;background:#fff}
       .plot text {fill:#223047}
       .plot .panel-title {font-size:16px;font-weight:600}
-      .plot .subtitle,.plot .axis-label,.plot .sample-count,.plot .chart-note {fill:#627188}
-      .plot .subtitle,.plot .sample-count,.plot .chart-note {font-size:11px}
+      .plot .subtitle,.plot .axis-label,.plot .sample-count {fill:#627188}
+      .plot .subtitle,.plot .sample-count {font-size:11px}
       .plot .grid line {stroke:#e4e9f0}.plot .grid .domain {display:none}
       .plot .axis path,.plot .axis line {stroke:#9aa7b6}.plot .axis text {fill:#526176}
       .plot .violin {fill-opacity:.72;stroke-width:1.1}
@@ -157,7 +157,7 @@
         svg.selectAll("*").remove();
         if (!hasData) return;
         const width = Math.max(container.clientWidth, 640, 106 + data.groups.length * 92);
-        const height = data.panels.length * panelHeight + 60;
+        const height = data.panels.length * panelHeight + 12;
         const left = 76, right = 30, plotWidth = width - left - right, plotHeight = 188;
         const dotLimit = Math.min(180, Math.floor(maxTotalDots / (data.panels.length * data.groups.length)));
         svg.attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`);
@@ -244,10 +244,6 @@
                     .attr("width", slot).attr("height", plotHeight + 75);
             });
         });
-        svg.append("text").attr("class", "chart-note").attr("x", left).attr("y", height - 28)
-            .text(`Equal maximum widths · white dot: median · thick bar: IQR · ${options.includeZeros ? "zeros included" : "nonzero values only"}`);
-        svg.append("text").attr("class", "chart-note").attr("x", left).attr("y", height - 11)
-            .text(options.showDots ? `Dots: up to ${dotLimit} sampled cells per violin · KDE and statistics use all plotted values` : "KDE and statistics use all plotted values");
         applySelection();
     }
 
