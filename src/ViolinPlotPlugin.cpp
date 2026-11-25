@@ -6,7 +6,7 @@
 #include <actions/PluginTriggerAction.h>
 #include <widgets/DropWidget.h>
 
-#include <QFileDialog>
+#include <QScopedValueRollback>
 #include <QSplitter>
 #include <QVBoxLayout>
 
@@ -39,14 +39,20 @@ void ViolinPlotPlugin::init()
     mainLayout->setContentsMargins(8, 8, 8, 8);
     mainLayout->setSpacing(6);
     getWidget().setLayout(mainLayout);
-    mainLayout->addWidget(_settingsAction.createDatasetWidget(&getWidget()));
-    mainLayout->addWidget(_settingsAction.createWidget(&getWidget(), GroupAction::Horizontal | GroupAction::NoMargins));
+    mainLayout->addWidget(_settingsAction.createWidget(&getWidget()));
 
     auto* genePlotSplitter = new QSplitter;
 
-    _violinPlotWidget = new ViolinPlotWidget;
     genePlotSplitter->addWidget(_settingsAction.createSelectionWidget(genePlotSplitter));
-    genePlotSplitter->addWidget(_violinPlotWidget);
+
+    auto* plotAreaWidget = new QWidget(genePlotSplitter);
+    auto* plotAreaLayout = new QVBoxLayout(plotAreaWidget);
+
+    plotAreaLayout->setContentsMargins(0, 0, 0, 0);
+    plotAreaLayout->addWidget(_settingsAction.createTitleWidget(plotAreaWidget));
+    _violinPlotWidget = new ViolinPlotWidget;
+    plotAreaLayout->addWidget(_violinPlotWidget, 1);
+    genePlotSplitter->addWidget(plotAreaWidget);
     genePlotSplitter->setStretchFactor(1, 1);
     genePlotSplitter->setSizes({240, 800});
     mainLayout->addWidget(genePlotSplitter, 1);
@@ -80,7 +86,7 @@ void ViolinPlotPlugin::init()
         const auto isDatasetPair   = datasets.size() == 2 && hasPointDataset && hasClusterDataset;
 
         if (isSingleDataset || isDatasetPair) {
-            if (!hasPointDataset && (!_pointDataset.isValid() || !isCompatibleClusterDataset(Dataset<Clusters>(datasets.first())))) {
+            if (!hasPointDataset && _pointDataset.isValid() && !isCompatibleClusterDataset(Dataset<Clusters>(datasets.first()))) {
                 dropRegions << new DropWidget::DropRegion(this, "Incompatible groups", "Load the corresponding expression Points dataset first.", "exclamation-circle", false);
             } else {
                 dropRegions << new DropWidget::DropRegion(this, "Violin plots", "Plot gene expression by cells or clusters", "chart-bar", true, [this, datasets] {
@@ -94,9 +100,15 @@ void ViolinPlotPlugin::init()
 
     connect(_violinPlotWidget, &ViolinPlotWidget::groupActivated, this, &ViolinPlotPlugin::activateClusterGroup);
     connect(&_pointDataset, &Dataset<Points>::dataChanged, this, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_pointDataset, &Dataset<Points>::removed, this, &ViolinPlotPlugin::updateGeneSelection);
+    connect(&_pointDataset, &Dataset<Points>::removed, this, [this] {
+        setPointDataset({});
+    });
+    connect(&_pointDataset, &Dataset<Points>::guiNameChanged, this, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_clusterDataset, &Dataset<Clusters>::dataChanged, this, &ViolinPlotPlugin::updateCellTypeSelection);
-    connect(&_clusterDataset, &Dataset<Clusters>::removed, this, &ViolinPlotPlugin::updateCellTypeSelection);
+    connect(&_clusterDataset, &Dataset<Clusters>::removed, this, [this] {
+        setClusterDataset({});
+    });
+    connect(&_clusterDataset, &Dataset<Clusters>::guiNameChanged, this, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_clusterDataset, &Dataset<Clusters>::dataSelectionChanged, this, &ViolinPlotPlugin::synchronizeClusterSelection);
 
     if (_hasDeferredPluginState) {
@@ -115,19 +127,7 @@ void ViolinPlotPlugin::init()
 
 bool ViolinPlotPlugin::isCompatibleClusterDataset(const Dataset<Clusters>& clusterDataset) const
 {
-    if (!_pointDataset.isValid() || !clusterDataset.isValid())
-        return false;
-
-    const auto parentDataset = clusterDataset->getParent();
-
-    if (!parentDataset.isValid() || parentDataset->getDataType() != PointType)
-        return false;
-
-    const auto clusterPointDataset     = Dataset<Points>(parentDataset);
-    const auto expressionSourceDataset = _pointDataset->getSourceDataset<Points>();
-    const auto clusterSourceDataset    = clusterPointDataset->getSourceDataset<Points>();
-
-    return expressionSourceDataset.isValid() && clusterSourceDataset.isValid() && expressionSourceDataset->getId() == clusterSourceDataset->getId();
+    return violin::DatasetsAction::isCompatibleGrouping(_pointDataset, clusterDataset);
 }
 
 void ViolinPlotPlugin::loadData(const Datasets& datasets)
@@ -162,21 +162,24 @@ void ViolinPlotPlugin::loadData(const Datasets& datasets)
     if (pointDataset.isValid())
         setPointDataset(pointDataset);
 
-    if (clusterDataset.isValid()) {
-        if (isCompatibleClusterDataset(clusterDataset))
-            setClusterDataset(clusterDataset);
-        else {
-            _groupingWarningMessage = "Groups were not loaded: the Clusters dataset must belong to the same source Points data.";
-            _settingsAction.getStatusMessageAction().setString(_groupingWarningMessage);
-        }
-    }
+    if (clusterDataset.isValid())
+        setClusterDataset(clusterDataset);
 }
 
 void ViolinPlotPlugin::setPointDataset(const Dataset<Points>& pointDataset)
 {
     _geneCalculationTimer.stop();
     _pointDataset = pointDataset;
-    _settingsAction.getPointDatasetPickerAction().setCurrentDataset(_pointDataset);
+
+    {
+        // Keep the pickers' own signals enabled so all popup widgets stay synchronized.
+        const QScopedValueRollback<bool> pickerSynchronizationGuard(_isSynchronizingDatasetPickers, true);
+        auto& datasetsAction = _settingsAction.getDatasetsAction();
+
+        datasetsAction.getPointDatasetPickerAction().setCurrentDataset(_pointDataset);
+        datasetsAction.updateClusterDatasetFilter(_pointDataset);
+        datasetsAction.getClusterDatasetPickerAction().setCurrentDataset(_clusterDataset);
+    }
 
     if (_clusterDataset.isValid() && !isCompatibleClusterDataset(_clusterDataset))
         setClusterDataset({});
@@ -186,9 +189,31 @@ void ViolinPlotPlugin::setPointDataset(const Dataset<Points>& pointDataset)
 
 void ViolinPlotPlugin::setClusterDataset(const Dataset<Clusters>& clusterDataset)
 {
+    if (clusterDataset.isValid() && !_pointDataset.isValid()) {
+        const auto parentDataset = clusterDataset->getParent();
+
+        if (parentDataset.isValid() && parentDataset->getDataType() == PointType)
+            setPointDataset(Dataset<Points>(parentDataset));
+    }
+
+    if (clusterDataset.isValid() && !isCompatibleClusterDataset(clusterDataset)) {
+        const QScopedValueRollback<bool> pickerSynchronizationGuard(_isSynchronizingDatasetPickers, true);
+
+        _settingsAction.getDatasetsAction().getClusterDatasetPickerAction().setCurrentDataset(_clusterDataset);
+        _groupingWarningMessage = "Groups were not loaded: the Clusters dataset must belong to the same source Points data.";
+        _settingsAction.getStatusMessageAction().setString(_groupingWarningMessage);
+        return;
+    }
+
     _clusterDataset = clusterDataset;
     _groupingWarningMessage.clear();
-    _settingsAction.getClusterDatasetPickerAction().setCurrentDataset(_clusterDataset);
+
+    {
+        const QScopedValueRollback<bool> pickerSynchronizationGuard(_isSynchronizingDatasetPickers, true);
+
+        _settingsAction.getDatasetsAction().getClusterDatasetPickerAction().setCurrentDataset(_clusterDataset);
+    }
+
     synchronizeClusterSelection();
     updateCellTypeSelection();
 }
@@ -255,7 +280,7 @@ void ViolinPlotPlugin::beginPlotUpdate()
     }
 
     if (_clusterDataset.isValid() && !isCompatibleClusterDataset(_clusterDataset)) {
-        _violinPlotWidget->setMessage("The grouping no longer matches this expression dataset. Choose All cells or load compatible Clusters.");
+        _violinPlotWidget->setMessage("The grouping no longer matches this expression dataset. Clear Cell groups or load compatible Clusters.");
         _settingsAction.getStatusMessageAction().setString("Incompatible cluster grouping.");
         return;
     }
@@ -333,7 +358,7 @@ void ViolinPlotPlugin::beginPlotUpdate()
     if (_violinGroups.empty()) {
         const bool hasClusters = _clusterDataset.isValid() && !_clusterDataset->getClusters().isEmpty();
 
-        _violinPlotWidget->setMessage(hasClusters ? "Check one or more cell types to show their violins, or choose Show all." : "The Clusters dataset has no groups. Choose All cells to plot without grouping.");
+        _violinPlotWidget->setMessage(hasClusters ? "Check one or more cell types to show their violins, or choose Show all." : "The Clusters dataset has no groups. Clear Cell groups to plot without grouping.");
         _settingsAction.getStatusMessageAction().setString(hasClusters ? "No cell types are checked." : "No clusters available.");
         return;
     }
@@ -469,21 +494,6 @@ void ViolinPlotPlugin::activateClusterGroup(int clusterIndex, Qt::KeyboardModifi
     _clusterDataset->setSelectionIndices(selectedClusterIndices);
     events().notifyDatasetDataSelectionChanged(_clusterDataset);
     synchronizeClusterSelection();
-}
-
-void ViolinPlotPlugin::exportPlot(bool exportAsSvg)
-{
-    QString fileName = QFileDialog::getSaveFileName(&getWidget(), "Export violin plots", exportAsSvg ? "violin-plots.svg" : "violin-plots.png", exportAsSvg ? "SVG image (*.svg)" : "PNG image (*.png)");
-
-    if (fileName.isEmpty())
-        return;
-
-    const QString suffix = exportAsSvg ? ".svg" : ".png";
-
-    if (!fileName.endsWith(suffix, Qt::CaseInsensitive))
-        fileName += suffix;
-
-    _violinPlotWidget->exportPlot(fileName, exportAsSvg);
 }
 
 void ViolinPlotPlugin::fromVariantMap(const QVariantMap& variantMap)

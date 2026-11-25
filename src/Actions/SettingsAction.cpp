@@ -3,10 +3,11 @@
 #include "../ViolinPlotPlugin.h"
 
 #include <ClusterData/ClusterData.h>
+#include <PointData/PointData.h>
 
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QScopedValueRollback>
 #include <QSplitter>
 
 using namespace mv;
@@ -16,48 +17,43 @@ namespace violin {
 
 SettingsAction::SettingsAction(QObject* parent, const QString& title) :
     GroupAction(parent, title),
+    _datasetsAction(this, "Datasets"),
+    _distributionAction(this, "Distribution"),
+    _plotAction(this, "Plot"),
+    _exportAction(this, "Export"),
     _geneSelectionAction(this, "Gene selection"),
     _cellTypeSelectionAction(this, "Cell type selection"),
-    _pointDatasetPickerAction(this, "Expression data"),
-    _clusterDatasetPickerAction(this, "Grouping"),
-    _logTransformAction(this, "log1p", false),
-    _includeZerosAction(this, "Include zeros", true),
-    _showCellDotsAction(this, "Cell dots", true),
-    _sharedYAxisAction(this, "Shared Y axis", false),
-    _bandwidthScaleAction(this, "Smooth", 0.25f, 4.0f, 1.0f, 2),
-    _showAllCellsAction(this, "All cells"),
     _helpAction(this, "Help"),
-    _exportPngAction(this, "PNG"),
-    _exportSvgAction(this, "SVG"),
     _datasetDisplayNameAction(this, "Dataset", "Violin plots — no expression data loaded"),
-    _statusMessageAction(this, "Status", "Drop expression Points data, then its Clusters data to compare cell types or spatial regions.")
+    _statusMessageAction(this, "Status", "Drop expression Points data, then its Clusters data to compare cell types or spatial regions."),
+    _primaryToolbarAction(this, "Primary toolbar")
 {
     setConnectionPermissionsToForceNone(true);
-
-    _logTransformAction.setToolTip("Natural log ln(1+x). Use for nonnegative expression that has not already been log-transformed. Negative values are excluded and reported.");
-    _includeZerosAction.setToolTip("Keep undetected cells in the distribution. Unchecking this plots only nonzero expression.");
-    _showCellDotsAction.setToolTip("Show up to 180 actual observations per violin using a stable reservoir sample. Density and statistics use every valid observation.");
-    _sharedYAxisAction.setToolTip("Use the same expression range for all displayed genes.");
-    _bandwidthScaleAction.setToolTip("Multiplier for the automatic Gaussian KDE bandwidth. Violin widths are normalized independently.");
-    _bandwidthScaleAction.setSingleStep(0.25f);
-    _bandwidthScaleAction.setPrefix("Smooth × ");
-    _showAllCellsAction.setToolTip("Remove cluster grouping and plot the entire loaded dataset.");
-    _helpAction.setToolTip("Explain the violin plot controls and summaries.");
-    _exportPngAction.setToolTip("Export all displayed gene panels as a PNG image.");
-    _exportSvgAction.setToolTip("Export all displayed gene panels as a vector SVG image.");
+    _helpAction.setIconByName("circle-question");
+    _helpAction.setToolTip("Help: violin plot settings and interpretation");
     _datasetDisplayNameAction.setTextElideMode(Qt::ElideRight);
     _statusMessageAction.setTextElideMode(Qt::ElideNone);
 
-    addAction(&_logTransformAction, ToggleAction::CheckBox);
-    addAction(&_includeZerosAction, ToggleAction::CheckBox);
-    addAction(&_showCellDotsAction, ToggleAction::CheckBox);
-    addAction(&_sharedYAxisAction, ToggleAction::CheckBox);
-    addAction(&_bandwidthScaleAction, DecimalAction::SpinBox);
-    addStretch();
-    addAction(&_exportPngAction, TriggerAction::Text);
-    addAction(&_exportSvgAction, TriggerAction::Text);
+    _primaryToolbarAction.addAction(&_datasetsAction);
+    _primaryToolbarAction.addAction(&_distributionAction);
+    _primaryToolbarAction.addAction(&_plotAction);
+    _primaryToolbarAction.addAction(&_exportAction);
+    _primaryToolbarAction.addAction(&_helpAction, 100, TriggerAction::Icon);
 
-    setExportEnabled(false);
+    addAction(&_datasetsAction);
+    addAction(&_distributionAction);
+    addAction(&_plotAction);
+    addAction(&_exportAction);
+    addAction(&_geneSelectionAction);
+    addAction(&_cellTypeSelectionAction);
+    addAction(&_helpAction, TriggerAction::Icon);
+    connect(&_helpAction, &TriggerAction::triggered, this, &SettingsAction::showHelp);
+}
+
+QWidget* SettingsAction::getWidget(QWidget* parent, const std::int32_t& widgetFlags)
+{
+    Q_UNUSED(widgetFlags)
+    return _primaryToolbarAction.createWidget(parent);
 }
 
 void SettingsAction::initialize(ViolinPlotPlugin* violinPlotPlugin)
@@ -68,48 +64,32 @@ void SettingsAction::initialize(ViolinPlotPlugin* violinPlotPlugin)
         return;
 
     _violinPlotPlugin = violinPlotPlugin;
-
+    _exportAction.initialize(violinPlotPlugin->_violinPlotWidget, &violinPlotPlugin->getWidget());
+    connect(&_datasetsAction.getPointDatasetPickerAction(), &DatasetPickerAction::currentDatasetChanged, this, [this](const Dataset<>& dataset) {
+        if (!_isRestoringState && !_violinPlotPlugin->_isSynchronizingDatasetPickers)
+            _violinPlotPlugin->setPointDataset(Dataset<Points>(dataset));
+    });
+    connect(&_datasetsAction.getClusterDatasetPickerAction(), &DatasetPickerAction::currentDatasetChanged, this, [this](const Dataset<>& dataset) {
+        if (!_isRestoringState && !_violinPlotPlugin->_isSynchronizingDatasetPickers)
+            _violinPlotPlugin->setClusterDataset(Dataset<Clusters>(dataset));
+    });
+    connect(&_datasetsAction, &DatasetsAction::calculationSettingsChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
+    connect(&_distributionAction, &DistributionAction::calculationSettingsChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
+    connect(&_plotAction, &PlotAction::displaySettingsChanged, this, &SettingsAction::updatePlotOptions);
     connect(&_geneSelectionAction, &GeneSelectionAction::selectionChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
     connect(&_cellTypeSelectionAction, &CellTypeSelectionAction::displayChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_logTransformAction, &ToggleAction::toggled, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_includeZerosAction, &ToggleAction::toggled, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_bandwidthScaleAction, &DecimalAction::valueChanged, violinPlotPlugin, &ViolinPlotPlugin::schedulePlotUpdate);
-    connect(&_showCellDotsAction, &ToggleAction::toggled, this, &SettingsAction::updatePlotOptions);
-    connect(&_sharedYAxisAction, &ToggleAction::toggled, this, &SettingsAction::updatePlotOptions);
-    connect(&_showAllCellsAction, &TriggerAction::triggered, this, [this] {
-        _violinPlotPlugin->setClusterDataset({});
-    });
-    connect(&_exportPngAction, &TriggerAction::triggered, this, [this] {
-        _violinPlotPlugin->exportPlot(false);
-    });
-    connect(&_exportSvgAction, &TriggerAction::triggered, this, [this] {
-        _violinPlotPlugin->exportPlot(true);
-    });
-    connect(&_helpAction, &TriggerAction::triggered, this, &SettingsAction::showHelp);
-    connect(_violinPlotPlugin->_violinPlotWidget, &ViolinPlotWidget::exportFinished, this, [this](bool success, const QString& error) {
-        if (!success)
-            QMessageBox::warning(&_violinPlotPlugin->getWidget(), "Export failed", error);
-    });
-    connect(_violinPlotPlugin->_violinPlotWidget, &ViolinPlotWidget::renderFailed, this, [this](const QString& error) {
+    connect(violinPlotPlugin->_violinPlotWidget, &ViolinPlotWidget::renderFailed, this, [this](const QString& error) {
         _statusMessageAction.setString("D3 chart error: " + error);
         setExportEnabled(false);
     });
 }
 
-QWidget* SettingsAction::createDatasetWidget(QWidget* parent)
+QWidget* SettingsAction::createTitleWidget(QWidget* parent)
 {
-    auto* widget = new QWidget(parent);
-    auto* layout = new QHBoxLayout(widget);
-
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(_datasetDisplayNameAction.createWidget(widget, StringAction::Label, [](WidgetAction*, QWidget* labelWidget) {
-        if (auto* label = qobject_cast<QLabel*>(labelWidget))
-            label->setTextFormat(Qt::PlainText);
-    }), 1);
-    layout->addWidget(_showAllCellsAction.createWidget(widget, TriggerAction::Text));
-    layout->addWidget(_helpAction.createWidget(widget, TriggerAction::Text));
-
-    return widget;
+    return _datasetDisplayNameAction.createWidget(parent, StringAction::Label, [](WidgetAction*, QWidget* widget) {
+        if (auto* titleLabel = qobject_cast<QLabel*>(widget))
+            titleLabel->setTextFormat(Qt::PlainText);
+    });
 }
 
 QWidget* SettingsAction::createSelectionWidget(QWidget* parent)
@@ -128,9 +108,9 @@ QWidget* SettingsAction::createSelectionWidget(QWidget* parent)
 QWidget* SettingsAction::createStatusWidget(QWidget* parent)
 {
     return _statusMessageAction.createWidget(parent, StringAction::Label, [](WidgetAction*, QWidget* widget) {
-        if (auto* label = qobject_cast<QLabel*>(widget)) {
-            label->setTextFormat(Qt::PlainText);
-            label->setWordWrap(true);
+        if (auto* statusLabel = qobject_cast<QLabel*>(widget)) {
+            statusLabel->setTextFormat(Qt::PlainText);
+            statusLabel->setWordWrap(true);
         }
     });
 }
@@ -140,18 +120,17 @@ void SettingsAction::updatePlotOptions()
     if (_violinPlotPlugin == nullptr || _violinPlotPlugin->_violinPlotWidget == nullptr)
         return;
 
-    _violinPlotPlugin->_violinPlotWidget->setDisplayOptions(_sharedYAxisAction.isChecked(), _showCellDotsAction.isChecked(), _logTransformAction.isChecked(), _includeZerosAction.isChecked());
+    _violinPlotPlugin->_violinPlotWidget->setDisplayOptions(_plotAction.getSharedYAxisAction().isChecked(), _plotAction.getShowCellDotsAction().isChecked(), _datasetsAction.getLogTransformAction().isChecked(), _distributionAction.getIncludeZerosAction().isChecked());
 }
 
 void SettingsAction::setExportEnabled(bool enabled)
 {
-    _exportPngAction.setEnabled(enabled);
-    _exportSvgAction.setEnabled(enabled);
+    _exportAction.setExportEnabled(enabled);
 }
 
 Options SettingsAction::getPlotOptions() const
 {
-    return {_logTransformAction.isChecked(), _includeZerosAction.isChecked(), _bandwidthScaleAction.getValue()};
+    return {_datasetsAction.getLogTransformAction().isChecked(), _distributionAction.getIncludeZerosAction().isChecked(), _distributionAction.getBandwidthScaleAction().getValue()};
 }
 
 void SettingsAction::loadDatasets()
@@ -159,34 +138,37 @@ void SettingsAction::loadDatasets()
     if (_violinPlotPlugin == nullptr)
         return;
 
-    // Capture both before loading points, which may clear an old grouping.
+    // Capture both selections before loading expression data can clear a grouping.
     Datasets datasets;
+    const auto pointDataset   = _datasetsAction.getPointDatasetPickerAction().getCurrentDataset();
+    const auto clusterDataset = _datasetsAction.getClusterDatasetPickerAction().getCurrentDataset();
 
-    if (_pointDatasetPickerAction.hasSelection())
-        datasets.push_back(_pointDatasetPickerAction.getCurrentDataset());
+    if (pointDataset.isValid())
+        datasets.push_back(pointDataset);
 
-    if (_clusterDatasetPickerAction.hasSelection())
-        datasets.push_back(_clusterDatasetPickerAction.getCurrentDataset());
+    if (clusterDataset.isValid())
+        datasets.push_back(clusterDataset);
 
-    _violinPlotPlugin->loadData(datasets);
+    if (datasets.isEmpty())
+        _violinPlotPlugin->setPointDataset({});
+    else
+        _violinPlotPlugin->loadData(datasets);
+
+    if (!clusterDataset.isValid())
+        _violinPlotPlugin->setClusterDataset({});
 }
 
 void SettingsAction::fromVariantMap(const QVariantMap& variantMap)
 {
+    const QScopedValueRollback<bool> restoringStateGuard(_isRestoringState, true);
+
     GroupAction::fromVariantMap(variantMap);
-
-    _pointDatasetPickerAction.fromParentVariantMap(variantMap);
-    _clusterDatasetPickerAction.fromParentVariantMap(variantMap);
+    _datasetsAction.fromParentVariantMap(variantMap);
     loadDatasets();
-
-    _logTransformAction.fromParentVariantMap(variantMap);
-    _includeZerosAction.fromParentVariantMap(variantMap);
-    _showCellDotsAction.fromParentVariantMap(variantMap);
-    _sharedYAxisAction.fromParentVariantMap(variantMap);
-    _bandwidthScaleAction.fromParentVariantMap(variantMap);
+    _distributionAction.fromParentVariantMap(variantMap);
+    _plotAction.fromParentVariantMap(variantMap);
     _geneSelectionAction.fromParentVariantMap(variantMap);
     _cellTypeSelectionAction.fromParentVariantMap(variantMap);
-
     updatePlotOptions();
 }
 
@@ -194,16 +176,11 @@ QVariantMap SettingsAction::toVariantMap() const
 {
     auto variantMap = GroupAction::toVariantMap();
 
-    _pointDatasetPickerAction.insertIntoVariantMap(variantMap);
-    _clusterDatasetPickerAction.insertIntoVariantMap(variantMap);
-    _logTransformAction.insertIntoVariantMap(variantMap);
-    _includeZerosAction.insertIntoVariantMap(variantMap);
-    _showCellDotsAction.insertIntoVariantMap(variantMap);
-    _sharedYAxisAction.insertIntoVariantMap(variantMap);
-    _bandwidthScaleAction.insertIntoVariantMap(variantMap);
+    _datasetsAction.insertIntoVariantMap(variantMap);
+    _distributionAction.insertIntoVariantMap(variantMap);
+    _plotAction.insertIntoVariantMap(variantMap);
     _geneSelectionAction.insertIntoVariantMap(variantMap);
     _cellTypeSelectionAction.insertIntoVariantMap(variantMap);
-
     return variantMap;
 }
 
@@ -213,16 +190,18 @@ void SettingsAction::showHelp()
         return;
 
     QMessageBox::information(&_violinPlotPlugin->getWidget(), "Violin plots",
-        "Load an expression Points dataset (cells/spots × genes), then optionally its Clusters dataset. "
-        "Use the gene checkboxes to select features. In the Cell types panel, check groups to show them and drag rows to reorder them. "
-        "All cell types are shown by default; Show all and Hide all change visibility without changing the cluster selection.\n\n"
-        "Full symmetric KDE violins show each group in a separate panel for each gene. "
-        "Density is trimmed to the observed range. White dots show medians, thick bars show the interquartile range, "
-        "and thin lines show the observed range. Widths are normalized per violin; n is the number plotted.\n\n"
-        "Cell dots are up to 180 actual observations per violin, sampled uniformly with a fixed seed. "
-        "The plot-wide dot budget may reduce that limit. Density and summaries use all eligible observations.\n\n"
-        "Zeros are included and log1p is off by default. Enable log1p only for untransformed, nonnegative input; "
-        "negative values are excluded and reported. Hover for detection rate (>0 among finite values), statistics, and skipped values.\n\n"
+        "The toolbar groups controls into Datasets (expression data, cell groups, and Apply log1p), Distribution (Include zeros and Smoothing), "
+        "Plot (Show cell dots and Shared Y axis), Export (PNG/SVG), and Help.\n\n"
+        "Load an expression Points dataset (cells/spots × genes), then optionally compatible Clusters. "
+        "Clear Cell groups to plot all loaded cells without grouping. Dropdown selections and dataset drops update each other. "
+        "Use gene checkboxes to select features. In Cell types, check groups to show them and drag rows to reorder them. "
+        "Show all and Hide all change visibility without changing the cluster selection.\n\n"
+        "Full symmetric KDE violins show each group in a separate panel for each gene. Density is trimmed to the observed range. "
+        "White dots show medians, thick bars show the interquartile range, and thin lines show the observed range. Widths are normalized per violin; n is the number plotted.\n\n"
+        "Cell dots are up to 180 actual observations per violin, sampled uniformly with a fixed seed. The plot-wide dot budget may reduce that limit. "
+        "Density and summaries use all eligible observations.\n\n"
+        "Zeros are included and log1p is off by default. Enable Apply log1p only for untransformed, nonnegative input; negative values are excluded and reported. "
+        "Hover for detection rate (>0 among finite values), statistics, and skipped values.\n\n"
         "Click a group to select it in ManiVault; Ctrl-click toggles selection. PNG and SVG export all displayed panels. "
         "This view does not perform normalization or statistical testing.");
 }

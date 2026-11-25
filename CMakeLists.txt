@@ -43,6 +43,14 @@ set(SOURCES
 )
 
 set(ACTIONS
+    src/Actions/DatasetsAction.h
+    src/Actions/DatasetsAction.cpp
+    src/Actions/DistributionAction.h
+    src/Actions/DistributionAction.cpp
+    src/Actions/PlotAction.h
+    src/Actions/PlotAction.cpp
+    src/Actions/ExportAction.h
+    src/Actions/ExportAction.cpp
     src/Actions/SettingsAction.h
     src/Actions/SettingsAction.cpp
     src/Actions/GeneSelectionAction.h

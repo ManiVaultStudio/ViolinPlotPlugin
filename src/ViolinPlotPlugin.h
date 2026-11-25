@@ -47,7 +47,6 @@ private:
     void calculateNextGeneDistribution();
     void synchronizeClusterSelection();
     void activateClusterGroup(int clusterIndex, Qt::KeyboardModifiers modifiers);
-    void exportPlot(bool exportAsSvg);
 
     mv::Dataset<Points>                        _pointDataset;
     mv::Dataset<Clusters>                      _clusterDataset;
@@ -68,6 +67,7 @@ private:
     mv::Datasets                               _deferredDatasets;
     QVariantMap                                _deferredPluginState;
     bool                                       _hasDeferredPluginState = false;
+    bool                                       _isSynchronizingDatasetPickers = false;
     QString                                    _groupingWarningMessage;
 
     friend class violin::SettingsAction;
